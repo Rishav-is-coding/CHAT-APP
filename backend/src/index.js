@@ -11,7 +11,7 @@ import { app, server } from "./lib/socket.js";
 dotenv.config()
 
 
-app.use(express.json())
+app.use(express.json({limit: "3mb"}))
 app.use(cookieParser())
 app.use(cors({
     origin : "http://localhost:5173",
