@@ -16,7 +16,7 @@ export const useChatStore = create((set, get) => ({ // Added 'get'
         try {
             const res = await axiosInstance.get("/messages/users");
             // FIX: Ensure res.data is an array. If it's null/undefined, use an empty array.
-            set({ users: Array.isArray(res.data) ? res.data : [] });
+            set({ users: Array.isArray(res.data.filteredUsers) ? res.data.filteredUsers : [] });
         } catch (error) {
             toast.error(error.response.data.message);
         } finally {
