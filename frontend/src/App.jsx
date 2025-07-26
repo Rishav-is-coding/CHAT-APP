@@ -17,8 +17,12 @@ function App() {
   const {theme} = useThemeStore()
 
   useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
     checkAuth()
-  } , [authUser])
+  } , [checkAuth])
 
   console.log({authUser})
 
@@ -30,7 +34,7 @@ function App() {
     )
   }
   return (
-    <div data-theme = {theme}>
+    <div className='bg-base-100'>
       <Navbar/>
       <Routes>
         <Route path = "/" element={authUser ? <HomePage/> : <Navigate to="/login"/>}/>
