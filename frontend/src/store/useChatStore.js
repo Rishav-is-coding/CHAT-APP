@@ -1,9 +1,8 @@
-// rishav-is-coding/chat-app/CHAT-APP-45e60af067e0368627bc48af2e307884168d4434/frontend/src/store/useChatStore.js
 import { create } from "zustand";
 import toast from "react-hot-toast";
 import { axiosInstance } from "../lib/axios.js";
 import { useAuthStore } from "./useAuthStore.js";
-import JSEncrypt from "jsencrypt";
+import JSEncrypt from "jsencrypt"
 
 export const useChatStore = create((set, get) => ({ 
     messages: [],
@@ -12,12 +11,12 @@ export const useChatStore = create((set, get) => ({
     isUsersLoading: false,
     isMessagesLoading: false,
 
+    //functions
     getUsers: async () => {
         set({ isUsersLoading: true });
         try {
             const res = await axiosInstance.get("/messages/users");
-            // HIGHLIGHTED CHANGE:
-            // - This now correctly handles the { "filteredUsers": [...] } response from your backend.
+            
             set({ users: Array.isArray(res.data.filteredUsers) ? res.data.filteredUsers : [] });
         } catch (error) {
             toast.error(error.response.data.message);
@@ -25,7 +24,7 @@ export const useChatStore = create((set, get) => ({
             set({ isUsersLoading: false });
         }
     },
-
+    
     getMessages: async (userId) => {
         set({ isMessagesLoading: true });
         try {
@@ -34,7 +33,7 @@ export const useChatStore = create((set, get) => ({
             
             const decrypt = new JSEncrypt();
             decrypt.setPrivateKey(privateKey);
-            
+
             const decryptedMessages = res.data.map(msg => {
                 if (!msg.text) return msg;
                 const decryptedText = decrypt.decrypt(msg.text);
@@ -43,7 +42,6 @@ export const useChatStore = create((set, get) => ({
                     text: decryptedText === false ? "⚠️ Could not decrypt message" : decryptedText
                 };
             });
-
             set({ messages: Array.isArray(decryptedMessages) ? decryptedMessages : [] });
         } catch (error) {
             toast.error(error.response.data.message);
@@ -53,19 +51,19 @@ export const useChatStore = create((set, get) => ({
     },
 
     sendMessage: async (messageData) => {
-        const { selectedUser, messages } = get(); 
+        const { selectedUser, messages } = get();
         try {
             const encrypt = new JSEncrypt();
             encrypt.setPublicKey(selectedUser.publicKey);
             const encryptedText = encrypt.encrypt(messageData.text);
-
-            const res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, { ...messageData, text: encryptedText });
             
+            const res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, {...messageData , text: encryptedText});
+
             const newMessageForSender = {
                 ...res.data,
-                text: messageData.text
+                text: messageData.text // Use the original, unencrypted text
             };
-            
+
             set({ messages: [...messages, newMessageForSender] });
         } catch (error) {
             toast.error(error.response.data.message);
@@ -81,13 +79,11 @@ export const useChatStore = create((set, get) => ({
         socket.on("newMessage" , (newMessage) => {
             const isMessageSentFromSelectedUser = newMessage.senderId === selectedUser._id
             if(!isMessageSentFromSelectedUser) return;
-            
-            const { privateKey } = useAuthStore.getState();
 
+            const { privateKey } = useAuthStore.getState();
             const decrypt = new JSEncrypt();
             decrypt.setPrivateKey(privateKey);
             const decryptedText = decrypt.decrypt(newMessage.text);
-
             set({
                 messages : [...get().messages , { 
                     ...newMessage, 
