@@ -2,11 +2,13 @@ import { create } from "zustand";
 import { axiosInstance } from "../lib/axios.js";
 import toast from "react-hot-toast";
 import {io} from "socket.io-client"
+import JSEncrypt from "jsencrypt";
 
 const BASE_URL = "http://localhost:5001"
 
 export const useAuthStore = create((set , get) => ({
     authUser : null,
+    privateKey: null,
     isSigningUp : false,
     isLoggingIng : false,
     isUpdatingProfile : false,
@@ -18,12 +20,12 @@ export const useAuthStore = create((set , get) => ({
     checkAuth : async() => {
         try {
             const res = await axiosInstance.get("/auth/check")
-
-            set({authUser : res.data})
+            const privateKey = localStorage.getItem(`privateKey_${res.data.email}`);
+            set({authUser : res.data , privateKey})
             get().connectSocket()
         }catch(error) {
             console.log("error in checkAuth : " , error)
-            set({authUser : null})
+            set({authUser : null , privateKey: null})
         }finally{
             set({isCheckingAuth : false})
         }
@@ -32,8 +34,14 @@ export const useAuthStore = create((set , get) => ({
     signup : async (data) => {
         set({isSigningUp : true})
         try{
-            const res = await axiosInstance.post("/auth/signup" , data)
-            set({authUser : res.data})
+            const encrypt = new JSEncrypt({ default_key_size: 2048 });
+            const privateKey = encrypt.getPrivateKey();
+            const publicKey = encrypt.getPublicKey();
+
+            localStorage.setItem(`privateKey_${data.email}`, privateKey);
+
+            const res = await axiosInstance.post("/auth/signup" , { ...data, publicKey })
+            set({authUser : res.data , privateKey})
             toast.success("Account created successfully")
             
             get().connectSocket()
@@ -46,8 +54,14 @@ export const useAuthStore = create((set , get) => ({
 
     logout : async () => {
         try{
+            const { authUser } = get();
             await axiosInstance.post("/auth/logout")
-            set({authUser : null})
+
+            if (authUser) {
+                localStorage.removeItem(`privateKey_${authUser.email}`);
+            }
+
+            set({authUser : null , privateKey: null})
             toast.success("logged out successfully")
             get().disconnectSocket()
         }catch(error) {
@@ -59,7 +73,10 @@ export const useAuthStore = create((set , get) => ({
         set({isLoggingIng : true})
         try{
             const res = await axiosInstance.post("/auth/login" , data)
-            set({authUser : res.data})
+            
+            const privateKey = localStorage.getItem(`privateKey_${res.data.email}`);
+            
+            set({authUser : res.data  , privateKey})
             toast.success("logged in successfully")
 
             get().connectSocket()

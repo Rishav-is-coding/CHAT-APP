@@ -1,21 +1,23 @@
+// rishav-is-coding/chat-app/CHAT-APP-45e60af067e0368627bc48af2e307884168d4434/frontend/src/store/useChatStore.js
 import { create } from "zustand";
 import toast from "react-hot-toast";
 import { axiosInstance } from "../lib/axios.js";
 import { useAuthStore } from "./useAuthStore.js";
+import JSEncrypt from "jsencrypt";
 
-export const useChatStore = create((set, get) => ({ // Added 'get'
+export const useChatStore = create((set, get) => ({ 
     messages: [],
     users: [],
     selectedUser: null,
     isUsersLoading: false,
     isMessagesLoading: false,
 
-    //functions
     getUsers: async () => {
         set({ isUsersLoading: true });
         try {
             const res = await axiosInstance.get("/messages/users");
-            // FIX: Ensure res.data is an array. If it's null/undefined, use an empty array.
+            // HIGHLIGHTED CHANGE:
+            // - This now correctly handles the { "filteredUsers": [...] } response from your backend.
             set({ users: Array.isArray(res.data.filteredUsers) ? res.data.filteredUsers : [] });
         } catch (error) {
             toast.error(error.response.data.message);
@@ -28,8 +30,21 @@ export const useChatStore = create((set, get) => ({ // Added 'get'
         set({ isMessagesLoading: true });
         try {
             const res = await axiosInstance.get(`/messages/${userId}`);
-            // Also a good idea to add the same protection here
-            set({ messages: Array.isArray(res.data) ? res.data : [] });
+            const { privateKey } = useAuthStore.getState();
+            
+            const decrypt = new JSEncrypt();
+            decrypt.setPrivateKey(privateKey);
+            
+            const decryptedMessages = res.data.map(msg => {
+                if (!msg.text) return msg;
+                const decryptedText = decrypt.decrypt(msg.text);
+                return {
+                    ...msg,
+                    text: decryptedText === false ? "⚠️ Could not decrypt message" : decryptedText
+                };
+            });
+
+            set({ messages: Array.isArray(decryptedMessages) ? decryptedMessages : [] });
         } catch (error) {
             toast.error(error.response.data.message);
         } finally {
@@ -38,11 +53,20 @@ export const useChatStore = create((set, get) => ({ // Added 'get'
     },
 
     sendMessage: async (messageData) => {
-        // You need to call get() to access the state inside an action
         const { selectedUser, messages } = get(); 
         try {
-            const res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, messageData);
-            set({ messages: [...messages, res.data] });
+            const encrypt = new JSEncrypt();
+            encrypt.setPublicKey(selectedUser.publicKey);
+            const encryptedText = encrypt.encrypt(messageData.text);
+
+            const res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, { ...messageData, text: encryptedText });
+            
+            const newMessageForSender = {
+                ...res.data,
+                text: messageData.text
+            };
+            
+            set({ messages: [...messages, newMessageForSender] });
         } catch (error) {
             toast.error(error.response.data.message);
         }
@@ -57,8 +81,18 @@ export const useChatStore = create((set, get) => ({ // Added 'get'
         socket.on("newMessage" , (newMessage) => {
             const isMessageSentFromSelectedUser = newMessage.senderId === selectedUser._id
             if(!isMessageSentFromSelectedUser) return;
+            
+            const { privateKey } = useAuthStore.getState();
+
+            const decrypt = new JSEncrypt();
+            decrypt.setPrivateKey(privateKey);
+            const decryptedText = decrypt.decrypt(newMessage.text);
+
             set({
-                messages : [...get().messages , newMessage]
+                messages : [...get().messages , { 
+                    ...newMessage, 
+                    text: decryptedText === false ? "⚠️ Could not decrypt message" : decryptedText 
+                }]
             })
         })
     },

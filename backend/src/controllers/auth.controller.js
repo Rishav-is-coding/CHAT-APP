@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs"
 import cloudinary from "../lib/cloudinary.js"
 
 export const signup = async (req, res) => {
-    const {fullName, email, password} = req.body
+    const {fullName, email, password , publicKey} = req.body
     try{
         
         if(!fullName || !email || !password){
@@ -25,7 +25,8 @@ export const signup = async (req, res) => {
         const newUser = new User({
             fullName : fullName,
             email : email,
-            password : hashedPassword
+            password : hashedPassword,
+            publicKey: publicKey
         })
 
         if(newUser) {
@@ -37,7 +38,8 @@ export const signup = async (req, res) => {
                 _id : newUser._id,
                 fullName:  newUser.fullName,
                 email : newUser.email,
-                profilePic : newUser.profilePic
+                profilePic : newUser.profilePic,
+                publicKey: newUser.publicKey
             })
         }else{
             res.status(400).json({message : "invalid user data"})
@@ -66,7 +68,8 @@ export const login = async (req, res) => {
             _id : user._id,
             fullName : user.fullName,
             email: user.email,
-            profilePic : user.profilePic
+            profilePic : user.profilePic,
+            publicKey: user.publicKey
         })
     }catch(error){
         console.log("error in login controller" , error.message)

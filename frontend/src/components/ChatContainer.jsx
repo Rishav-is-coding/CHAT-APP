@@ -16,16 +16,17 @@ const ChatContainer = () => {
     subscribeToMessages,
     unsubscribeFromMessages,
   } = useChatStore();
-  const { authUser } = useAuthStore();
+  const { authUser , isCheckingAuth } = useAuthStore();
   const messageEndRef = useRef(null);
 
   useEffect(() => {
-    getMessages(selectedUser._id);
-
-    subscribeToMessages();
+    if (!isCheckingAuth) {
+      getMessages(selectedUser._id);
+      subscribeToMessages();
+    }
 
     return () => unsubscribeFromMessages();
-  }, [selectedUser._id, getMessages, subscribeToMessages, unsubscribeFromMessages]);
+  } , [selectedUser._id, getMessages, subscribeToMessages, unsubscribeFromMessages, isCheckingAuth])
 
   useEffect(() => {
     if (messageEndRef.current && messages) {
@@ -33,7 +34,7 @@ const ChatContainer = () => {
     }
   }, [messages]);
 
-  if (isMessagesLoading) {
+  if (isMessagesLoading || isCheckingAuth) {
     return (
       <div className="flex-1 flex flex-col overflow-auto">
         <ChatHeader />
@@ -71,7 +72,7 @@ const ChatContainer = () => {
                 {formatMessageTime(message.createdAt)}
               </time>
             </div>
-            <div className="chat-bubble flex flex-col">
+            <div className= {`chat-bubble flex flex-col ${!message.text && !message.image ? "p-0" : ""}`}>
               {message.image && (
                 <img
                   src={message.image}
