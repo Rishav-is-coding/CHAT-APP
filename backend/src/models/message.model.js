@@ -12,8 +12,11 @@ const messageSchema = new Schema(
             ref : "User",
             required : true
         },
-        text :{
-            type : String
+        textForSender: {
+            type: String
+        },
+        textForReceiver: {
+            type: String
         },
         image :{
             type : String

@@ -16,7 +16,7 @@ export const useChatStore = create((set, get) => ({
         set({ isUsersLoading: true });
         try {
             const res = await axiosInstance.get("/messages/users");
-            
+
             set({ users: Array.isArray(res.data.filteredUsers) ? res.data.filteredUsers : [] });
         } catch (error) {
             toast.error(error.response.data.message);
@@ -29,14 +29,26 @@ export const useChatStore = create((set, get) => ({
         set({ isMessagesLoading: true });
         try {
             const res = await axiosInstance.get(`/messages/${userId}`);
-            const { privateKey } = useAuthStore.getState();
+            const { privateKey, authUser } = useAuthStore.getState();
             
+            if (!privateKey) {
+                set({ messages: [], isMessagesLoading: false });
+                return;
+            }
+
             const decrypt = new JSEncrypt();
             decrypt.setPrivateKey(privateKey);
 
             const decryptedMessages = res.data.map(msg => {
-                if (!msg.text) return msg;
-                const decryptedText = decrypt.decrypt(msg.text);
+                let decryptedText = "";
+                // If I am the sender, decrypt the text meant for me
+                if (msg.senderId === authUser._id && msg.textForSender) {
+                    decryptedText = decrypt.decrypt(msg.textForSender);
+                // If I am the receiver, decrypt the text meant for me
+                } else if (msg.receiverId === authUser._id && msg.textForReceiver) {
+                    decryptedText = decrypt.decrypt(msg.textForReceiver);
+                }
+
                 return {
                     ...msg,
                     text: decryptedText === false ? "⚠️ Could not decrypt message" : decryptedText
@@ -44,7 +56,7 @@ export const useChatStore = create((set, get) => ({
             });
             set({ messages: Array.isArray(decryptedMessages) ? decryptedMessages : [] });
         } catch (error) {
-            toast.error(error.response.data.message);
+            toast.error(error.response?.data?.message || "Failed to fetch messages.");
         } finally {
             set({ isMessagesLoading: false });
         }
@@ -52,21 +64,32 @@ export const useChatStore = create((set, get) => ({
 
     sendMessage: async (messageData) => {
         const { selectedUser, messages } = get();
+        const { authUser } = useAuthStore.getState();
         try {
             const encrypt = new JSEncrypt();
+
+            // Encrypt for the receiver
             encrypt.setPublicKey(selectedUser.publicKey);
-            const encryptedText = encrypt.encrypt(messageData.text);
+            const textForReceiver = encrypt.encrypt(messageData.text);
+
+            // Encrypt for the sender
+            encrypt.setPublicKey(authUser.publicKey);
+            const textForSender = encrypt.encrypt(messageData.text);
             
-            const res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, {...messageData , text: encryptedText});
+            const res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, {
+                ...messageData, 
+                textForSender, 
+                textForReceiver
+            });
 
             const newMessageForSender = {
                 ...res.data,
-                text: messageData.text // Use the original, unencrypted text
+                text: messageData.text 
             };
 
             set({ messages: [...messages, newMessageForSender] });
         } catch (error) {
-            toast.error(error.response.data.message);
+            toast.error(error.response?.data?.message || "Failed to send message.");
         }
     },
 
@@ -83,7 +106,7 @@ export const useChatStore = create((set, get) => ({
             const { privateKey } = useAuthStore.getState();
             const decrypt = new JSEncrypt();
             decrypt.setPrivateKey(privateKey);
-            const decryptedText = decrypt.decrypt(newMessage.text);
+            const decryptedText = decrypt.decrypt(newMessage.textForReceiver);
             set({
                 messages : [...get().messages , { 
                     ...newMessage, 
