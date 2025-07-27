@@ -18,10 +18,25 @@ export const useAuthStore = create((set , get) => ({
     socket : null,
 
     checkAuth : async() => {
+        set({ isCheckingAuth: true });
         try {
             const res = await axiosInstance.get("/auth/check")
-            const privateKey = localStorage.getItem(`privateKey_${res.data.email}`);
-            set({authUser : res.data , privateKey})
+            let authUser = res.data;
+            let privateKey = localStorage.getItem(`privateKey_${authUser.email}`);
+
+            if (!privateKey) {
+                toast("Keys not found. Generating new keys.", { icon: "🔐" });
+                const encrypt = new JSEncrypt({ default_key_size: 2048 });
+                privateKey = encrypt.getPrivateKey();
+                const publicKey = encrypt.getPublicKey();
+
+                localStorage.setItem(`privateKey_${authUser.email}`, privateKey);
+
+                const updatedUserRes = await axiosInstance.put("/auth/update-public-key", { publicKey });
+                authUser = updatedUserRes.data;
+            }
+
+            set({authUser : authUser , privateKey})
             get().connectSocket()
         }catch(error) {
             console.log("error in checkAuth : " , error)
@@ -69,21 +84,32 @@ export const useAuthStore = create((set , get) => ({
         }
     },
 
-    login : async (data) => {
-        set({isLoggingIng : true})
-        try{
-            const res = await axiosInstance.post("/auth/login" , data)
-            
-            const privateKey = localStorage.getItem(`privateKey_${res.data.email}`);
-            
-            set({authUser : res.data  , privateKey})
-            toast.success("logged in successfully")
+    login: async (data) => {
+        set({ isLoggingIng: true });
+        try {
+            const res = await axiosInstance.post("/auth/login", data);
+            let privateKey = localStorage.getItem(`privateKey_${res.data.email}`);
+            let authUser = res.data;
 
-            get().connectSocket()
-        }catch(error){ 
-            toast.error(error.response.data.message)
-        }finally{
-            set({isLoggingIng : false})
+            if (!privateKey) {
+                const encrypt = new JSEncrypt({ default_key_size: 2048 });
+                privateKey = encrypt.getPrivateKey();
+                const publicKey = encrypt.getPublicKey();
+
+                localStorage.setItem(`privateKey_${res.data.email}`, privateKey);
+                
+                const updatedUserRes = await axiosInstance.put("/auth/update-public-key", { publicKey });
+                authUser = updatedUserRes.data;
+            }
+
+            set({ authUser, privateKey });
+            toast.success("Logged in successfully");
+
+            get().connectSocket();
+        } catch (error) {
+            toast.error(error.response.data.message);
+        } finally {
+            set({ isLoggingIng: false });
         }
     },
 
