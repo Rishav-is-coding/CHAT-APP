@@ -94,9 +94,18 @@ export const updateProfile = async (req, res) => {
     try {
         const {profilePic} = req.body;
         const userId = req.user._id
-
+        const user = req.user
         if(!profilePic){
             res.status(400).json({message : "profile pic not found"})
+        }
+
+        // Check if there's an old profile picture and delete it from Cloudinary
+        if (user.profilePic) {
+            // Extract public_id from the URL
+            // Example URL: http://res.cloudinary.com/cloud_name/image/upload/v1625242939/public_id.jpg
+            // We need to get the 'public_id' part
+            const publicId = user.profilePic.split("/").pop().split(".")[0];
+            await cloudinary.uploader.destroy(publicId);
         }
 
         const uploadResponse = await cloudinary.uploader.upload(profilePic)
